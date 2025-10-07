@@ -1,2 +1,5 @@
 # Ignore the build output
 lex
+
+# Also ignore gdb history
+.gdb_history
