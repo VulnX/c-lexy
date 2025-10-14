@@ -1,7 +1,9 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 typedef struct {
   char *content;
@@ -9,11 +11,16 @@ typedef struct {
 } Source;
 Source SOURCE;
 
+enum TokenType { KEYWORD = 1, OPERATOR, CONSTANT };
+
 typedef struct token {
   char *str;
+  enum TokenType type;
   struct token *next;
 } Token;
 Token *TOKENS_HEAD = NULL;
+
+#define ARR_LEN(arr) (sizeof((arr)) / sizeof((arr[0])))
 
 const char *KEYWORDS[] = {
     "auto",   "double", "int",    "struct",   "break",   "else",     "long",
@@ -21,18 +28,29 @@ const char *KEYWORDS[] = {
     "return", "union",  "const",  "float",    "short",   "unsigned", "continue",
     "for",    "signed", "void",   "default",  "goto",    "sizeof",   "volatile",
     "do",     "if",     "static", "while"};
-const int KEYWORDS_LEN = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
+const int KEYWORDS_LEN = ARR_LEN(KEYWORDS);
 const char SEPARATORS[] = {' ', ',', ';', '{', '}', '(',
                            ')', '[', ']', ':', '#', '\n'};
-const int SEPARATORS_LEN = sizeof(SEPARATORS) / sizeof(SEPARATORS[0]);
+const int SEPARATORS_LEN = ARR_LEN(SEPARATORS);
+const char *OPERATORS[] = {
+    "+",  "-",  "*",      "/",  "%",  "==", "!=", ">",   "<",   ">=", "<=",
+    "&&", "||", "!",      "&",  "|",  "^",  "~",  "<<",  ">>",  "=",  "+=",
+    "-=", "*=", "/=",     "%=", "&=", "|=", "^=", "<<=", ">>=", "++", "--",
+    "?",  ":",  "sizeof", ",",  "->", "##", "#",  "::",
+};
+const int OPERATORS_LEN = ARR_LEN(OPERATORS);
 
 void cleanup(int status);
 void strip_strncpy(char *dst, char *src, unsigned int len);
 void append_token(unsigned int fd, unsigned int bk);
 void extract_tokens(void);
-void display_tokens(void);
+bool is_keyword(char *s);
+bool is_operator(char *s);
+bool is_constant(char *s);
+void categorize_tokens(void);
 void analyze(void);
 void read_file(FILE *fp);
+void print_tokens(void);
 
 void cleanup(int status) {
   if (SOURCE.content) {
@@ -131,12 +149,52 @@ void extract_tokens(void) {
   }
 }
 
-void display_tokens(void) {
+bool is_keyword(char *s) {
+  bool res;
+  res = false;
+  for (int i = 0; i < KEYWORDS_LEN; i++) {
+    if (strcmp(s, KEYWORDS[i]) == 0) {
+      res = true;
+      break;
+    }
+  }
+  return res;
+}
+
+bool is_operator(char *s) {
+  bool res;
+  res = false;
+  for (int i = 0; i < OPERATORS_LEN; i++) {
+    if (strcmp(s, OPERATORS[i]) == 0) {
+      res = true;
+      break;
+    }
+  }
+  return res;
+}
+
+bool is_constant(char *s) {
+  bool res;
+  res = false;
+  if (isdigit(s[0])) // numeric
+    res = true;
+  if (s[0] == '\'') // char
+    res = true;
+  if (s[0] == '"') // string
+    res = true;
+  return res;
+}
+
+void categorize_tokens(void) {
   Token *token;
   token = TOKENS_HEAD;
-  puts("Tokens:");
   while (token) {
-    printf("%s\n", token->str);
+    if (is_keyword(token->str))
+      token->type = KEYWORD;
+    if (is_operator(token->str))
+      token->type = OPERATOR;
+    if (is_constant(token->str))
+      token->type = CONSTANT;
     token = token->next;
   }
 }
@@ -149,7 +207,7 @@ void analyze(void) {
   puts("");
   printf("Analyzing:\n");
   extract_tokens();
-  display_tokens();
+  categorize_tokens();
   for (int i = 0; i < 80; i++) {
     printf("=");
   }
@@ -169,6 +227,36 @@ void read_file(FILE *fp) {
   fread(SOURCE.content, sizeof(char), SOURCE.len, fp);
 }
 
+void print_tokens(void) {
+  Token *token;
+  int off;
+  int spaces;
+  off = 30;
+  token = TOKENS_HEAD;
+  while (token) {
+    printf("[TOKEN] \"%s\" ", token->str);
+    spaces = off - ((int)strlen(token->str) + 11);
+    while (0 < spaces--)
+      putchar(' ');
+    printf("<-> type: ");
+    switch (token->type) {
+    case KEYWORD:
+      puts("KEYWORD");
+      break;
+    case OPERATOR:
+      puts("OPERATOR");
+      break;
+    case CONSTANT:
+      puts("CONSTANT");
+      break;
+    default:
+      puts("UNCATEGORIZED/LITERALS");
+      break;
+    }
+    token = token->next;
+  }
+}
+
 int main(int argc, char **argv) {
   char *file_name;
   FILE *fp;
@@ -186,5 +274,6 @@ int main(int argc, char **argv) {
   read_file(fp);
   fclose(fp);
   analyze();
+  print_tokens();
   cleanup(EXIT_SUCCESS);
 }
