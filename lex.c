@@ -23,14 +23,15 @@ const char *KEYWORDS[] = {
     "do",     "if",     "static", "while"};
 const int KEYWORDS_LEN = sizeof(KEYWORDS) / sizeof(KEYWORDS[0]);
 const char SEPARATORS[] = {' ', ',', ';', '{', '}', '(',
-                     ')', '[', ']', ':', '#', '\n'};
+                           ')', '[', ']', ':', '#', '\n'};
 const int SEPARATORS_LEN = sizeof(SEPARATORS) / sizeof(SEPARATORS[0]);
 
 void cleanup(int status);
+void strip_strncpy(char *dst, char *src, unsigned int len);
 void append_token(unsigned int fd, unsigned int bk);
 void extract_tokens(void);
+void display_tokens(void);
 void analyze(void);
-void dump_file(void);
 void read_file(FILE *fp);
 
 void cleanup(int status) {
@@ -41,33 +42,65 @@ void cleanup(int status) {
   exit(status);
 }
 
+void strip_strncpy(char *dst, char *src, unsigned int len) {
+  unsigned int src_idx, dst_idx;
+  char curr;
+  bool skip;
+
+  for (src_idx = dst_idx = 0; src_idx < len; src_idx++) {
+    curr = src[src_idx];
+    skip = false;
+    for (int i = 0; i < SEPARATORS_LEN; i++) {
+      if (curr == SEPARATORS[i]) {
+        skip = true;
+        break;
+      }
+    }
+    if (skip)
+      continue;
+    dst[dst_idx++] = curr;
+  }
+  dst[dst_idx] = '\0';
+}
+
 void append_token(unsigned int fd, unsigned int bk) {
   unsigned int token_len;
-  char *token;
+  char *token_str;
   bool can_proceed;
+  Token *token;
 
-  token_len = fd - bk;
+  token_len = fd - bk + 1;
   if (token_len == 0) {
     // ensure @ bk index we have token
     can_proceed = false;
-    printf("checking single char \'%c\'", SOURCE.content[bk]);
     for (int i = 0; i < SEPARATORS_LEN; i++) {
       if (SOURCE.content[bk] == SEPARATORS[i]) {
         can_proceed = true;
       }
     }
-    printf("can_proceed: %s\n", can_proceed ? "true" : "false");
     if (!can_proceed)
       return;
   }
-  token = calloc((token_len + 1), sizeof(char));
-  if (token == NULL) {
-    fprintf(stderr, "Failed to allocate memory for token\n");
+  token_str = calloc((token_len + 1), sizeof(char));
+  if (token_str == NULL) {
+    fprintf(stderr, "Failed to allocate memory for token str\n");
     cleanup(EXIT_FAILURE);
   }
-  strncpy(token, &SOURCE.content[bk], token_len);
-  token[token_len] = '\0';
-  printf("created token : \"%s\"\n", token);
+  strip_strncpy(token_str, &SOURCE.content[bk], token_len);
+  token_str[token_len] = '\0';
+  if (strlen(token_str) == 0) {
+    free(token_str);
+    return;
+  }
+  token = calloc(1, sizeof(Token));
+  if (token == NULL) {
+    fprintf(stderr, "Failed to allocate memory for token\n");
+    free(token_str);
+    cleanup(EXIT_FAILURE);
+  }
+  token->str = token_str;
+  token->next = TOKENS_HEAD;
+  TOKENS_HEAD = token;
 }
 
 void extract_tokens(void) {
@@ -89,13 +122,22 @@ void extract_tokens(void) {
     if (curr_is_separator) {
       // todo
       curr_is_separator = false; // for next iteration
-      printf("reached separator. fd = %d, bk = %d\n", fd, bk);
       append_token(fd, bk);
-      fd++;
       bk = fd;
+      fd++;
     } else {
       fd++;
     }
+  }
+}
+
+void display_tokens(void) {
+  Token *token;
+  token = TOKENS_HEAD;
+  puts("Tokens:");
+  while (token) {
+    printf("%s\n", token->str);
+    token = token->next;
   }
 }
 
@@ -107,22 +149,7 @@ void analyze(void) {
   puts("");
   printf("Analyzing:\n");
   extract_tokens();
-
-  for (int i = 0; i < 80; i++) {
-    printf("=");
-  }
-  puts("");
-}
-
-void dump_file(void) {
-  puts("");
-  for (int i = 0; i < 80; i++) {
-    printf("=");
-  }
-  puts("");
-  printf("File Dump:\n");
-  puts("");
-  printf("%s", SOURCE.content);
+  display_tokens();
   for (int i = 0; i < 80; i++) {
     printf("=");
   }
@@ -159,6 +186,5 @@ int main(int argc, char **argv) {
   read_file(fp);
   fclose(fp);
   analyze();
-  dump_file();
   cleanup(EXIT_SUCCESS);
 }

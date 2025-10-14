@@ -13,7 +13,7 @@ CFLAGS = -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 \
          -Wmissing-declarations -Wmissing-prototypes \
          -Wstrict-prototypes -Wold-style-definition \
          -Winline -Wconversion -Wuninitialized \
-         -g -O0 -fsanitize=address -fno-omit-frame-pointer
+         -g -O3 -fno-omit-frame-pointer
 
 # Linker flags (optional but good with ASan)
 LDFLAGS = -fsanitize=address
